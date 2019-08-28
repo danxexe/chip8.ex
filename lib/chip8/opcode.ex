@@ -13,8 +13,8 @@ defmodule Chip8.Opcode do
     :ret
   end
 
-  def disassemble(<<0x0::4, _::12>>) do
-    :noop
+  def disassemble(opcode = <<0x0::4, _::12>>) do
+    {:noop, opcode}
   end
 
   def disassemble(<<0x1::4, addr::12>>) do
