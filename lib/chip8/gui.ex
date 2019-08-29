@@ -1,6 +1,16 @@
 defmodule Chip8.GUI do
   alias Chip8.Opcode
 
+  @compile inline: [
+    padding: 3,
+    slice_and_pad_trailing: 2,
+    unpack_pixels: 2,
+    unpack_opcodes: 2,
+    format_instruction: 1,
+    column: 1,
+    map_pixels: 1,
+  ]
+
   def init(state) do
     [
       IO.ANSI.clear,
@@ -59,7 +69,7 @@ defmodule Chip8.GUI do
     |> Enum.chunk_every(64)
     |> Enum.chunk_every(2)
     |> Enum.map(&Enum.zip/1)
-    |> Enum.map(fn row_2px -> [column(x), row_2px |> Enum.map(&map_2row_pixels/1), "\n"] end)
+    |> Enum.map(&map_row(&1, x))
 
     [
       (if y > 0, do: cursor(0, y), else: ""),
@@ -67,7 +77,11 @@ defmodule Chip8.GUI do
     ]
   end
 
-  defp map_2row_pixels(pixels) do
+  defp map_row(row, x) do
+    [column(x), row |> Enum.map(&map_pixels/1), "\n"]
+  end
+
+  defp map_pixels(pixels) do
     case pixels do
       {0, 0} -> " "
       {0, 1} -> "▄"
@@ -93,15 +107,19 @@ defmodule Chip8.GUI do
   end
 
   defp hex(val, digits \\ 2) do
-    val |> Integer.to_string(16) |> String.pad_leading(digits, "0")
+    str = val |> Integer.to_string(16)
+    [padding(str, digits, "0"), str]
   end
+
+  defp padding(binary, bytes, char) when byte_size(binary) < bytes, do: :binary.copy(char, bytes - byte_size(binary))
+  defp padding(binary, _bytes, _char), do: binary
 
   def disasm(state, x, y) do
     instructions = binary_part(state.memory, state.pc - 16, 2 * 16)
     |> unpack_opcodes()
     |> Stream.with_index
     |> Enum.map(fn {opcode, i}->
-      instruction = opcode |> Opcode.disassemble |> format_instruction |> String.slice(0..27) |> String.pad_trailing(28)
+      instruction = opcode |> Opcode.disassemble |> format_instruction |> slice_and_pad_trailing(27)
       if i == 8 do
         [column(x), IO.ANSI.light_blue_background, instruction, "\n"]
       else
@@ -115,9 +133,16 @@ defmodule Chip8.GUI do
     ]
   end
 
-  defp format_instruction({:v, i}), do: "V#{i |> Integer.to_string(16)}"
+  defp slice_and_pad_trailing(str, n) when byte_size(str) > n, do: :binary.part(str, 0, n)
+  defp slice_and_pad_trailing(str, n) when byte_size(str) < n, do: [str, padding(str, n, " ")]
+  defp slice_and_pad_trailing(str, _n), do: str
+
+  for i <- 0x0..0xF do
+    name = "V" <> Integer.to_string(i, 16)
+    defp format_instruction({:v, unquote(i)}), do: unquote(name)
+  end
   defp format_instruction(val) when is_tuple(val), do:  val |> Tuple.to_list |> Enum.map(&format_instruction/1) |> Enum.join(" ")
-  defp format_instruction(val) when is_atom(val), do: val |> to_string |> String.upcase
+  defp format_instruction(val) when is_atom(val), do: val |> to_string
   defp format_instruction(val), do: val |> inspect
 
   defp unpack_pixels(bytes) when is_binary(bytes), do: unpack_pixels(bytes, [])
