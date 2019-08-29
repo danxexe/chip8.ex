@@ -7,6 +7,7 @@ defmodule Chip8.State do
     registers: nil,
     stack: nil,
     screen: nil,
+    screen_changed?: false,
     pc: 0x200,
     cycles: 0,
   ]

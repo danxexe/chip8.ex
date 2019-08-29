@@ -16,7 +16,7 @@ defmodule Chip8.Interpreter do
     case fetch_instruction(state) do
       :halt -> state
       instruction ->
-        state = Instruction.execute(instruction, state) |> increment_pc()
+        state = Instruction.execute(instruction, %{state | screen_changed?: false}) |> increment_pc()
         state = callback.(state)
         cycles = if is_integer(cycles), do: cycles - 1, else: cycles
         state |> run(cycles, callback)

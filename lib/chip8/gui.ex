@@ -4,33 +4,47 @@ defmodule Chip8.GUI do
   def init(state) do
     [
       IO.ANSI.clear,
-      box(0, 0, 66, 34),
-      box(67, 0, 15, 34),
-      box(82, 0, 30, 34),
+      boxes(),
     ] |> IO.puts
 
     state
+  end
+
+  defp boxes do
+    [
+      box(0, 0, 66, 18),
+      box(67, 0, 15, 18),
+      box(82, 0, 30, 18),
+    ]
   end
 
   def render(state) do
     [
-      screen(state, 1, 1),
+      (if state.screen_changed?, do: screen(state, 1, 1), else: []),
       registers(state, 68, 1),
       disasm(state, 83, 1),
-      cursor(0, 33),
     ] |> IO.puts
 
     state
   end
+
+  @begin_box "\x1b(0"
+  @end_box "\x1b(B"
+  @top_left 0x6C
+  @top_right 0x6B
+  @bottom_left 0x6D
+  @bottom_right 0x6A
+  @h_line 0x71
+  @v_line 0x78
 
   def box(x, y, w, h) when w >= 2 and h >= 2 do
     w = w - 2; h = h - 2
 
     [
       cursor(0, y),
-      [column(x), "┏", :binary.copy("━", w), "┓", "\n"],
-      [column(x), "┃", :binary.copy(" ", w), "┃", "\n"] |> List.duplicate(h),
-      [column(x), "┗", :binary.copy("━", w), "┛", "\n"],
+      [column(x), @begin_box, @top_left, :binary.copy(<<@h_line>>, w), @top_right, @end_box, "\n"],
+      [column(x), @begin_box, @v_line, IO.ANSI.cursor_right(w), @v_line, @end_box, "\n"] |> List.duplicate(h),
+      [column(x), @begin_box, @bottom_left, :binary.copy(<<@h_line>>, w), @bottom_right, @end_box, "\n"],
     ]
   end
 
@@ -42,17 +56,24 @@ defmodule Chip8.GUI do
   def screen(state, x, y) do
     pixels = state.screen
     |> unpack_pixels()
-    |> Enum.map(fn
-      1 -> "▉"
-      0 -> " "
-    end)
     |> Enum.chunk_every(64)
-    |> Enum.map(fn pixels -> [column(x), pixels, "\n"] end)
+    |> Enum.chunk_every(2)
+    |> Enum.map(&Enum.zip/1)
+    |> Enum.map(fn row_2px -> [column(x), row_2px |> Enum.map(&map_2row_pixels/1), "\n"] end)
 
     [
       (if y > 0, do: cursor(0, y), else: ""),
       pixels,
     ]
+  end
+
+  defp map_2row_pixels(pixels) do
+    case pixels do
+      {0, 0} -> " "
+      {0, 1} -> "▄"
+      {1, 0} -> "▀"
+      {1, 1} -> "█"
+    end
   end
 
   def registers(state, x, y) do
@@ -76,7 +97,7 @@ defmodule Chip8.GUI do
   end
 
   def disasm(state, x, y) do
-    instructions = binary_part(state.memory, state.pc - 16, 2 * 32)
+    instructions = binary_part(state.memory, state.pc - 16, 2 * 16)
     |> unpack_opcodes()
     |> Stream.with_index
     |> Enum.map(fn {opcode, i}->

@@ -113,7 +113,7 @@ defmodule Chip8.Instruction do
       state
     end
 
-    %{state | screen: screen}
+    %{state | screen: screen, screen_changed?: true}
   end
 
   def execute(instruction, state) do
